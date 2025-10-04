@@ -1,0 +1,11 @@
+# Binaries
+/bin
+*.exe
+*.test
+
+# Local environment variables
+.env
+
+# OS-specific files
+.DS_Store
+Thumbs.db
