@@ -8,6 +8,7 @@ import (
 	"github.com/Masterminds/squirrel"
 	"github.com/georgysavva/scany/v2/pgxscan"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // Create inserts a new user record into the database.
@@ -16,7 +17,7 @@ func (r *repository) Create(ctx context.Context, user *User) error {
 	user.UpdatedAt = time.Now()
 
 	query, args, err := r.psql.Insert("users").
-		Columns("id", "firstName", "lastName", "email", "password_hash", "email_verified", "created_at", "updated_at").
+		Columns("id", "first_name", "last_name", "email", "password_hash", "email_verified", "created_at", "updated_at").
 		Values(user.ID, user.FirstName, user.LastName, user.Email, user.PasswordHash, user.EmailVerified, user.CreatedAt, user.UpdatedAt).
 		ToSql()
 	if err != nil {
@@ -25,7 +26,11 @@ func (r *repository) Create(ctx context.Context, user *User) error {
 
 	_, err = r.db.Exec(ctx, query, args...)
 	if err != nil {
-		// Here you might check for a unique constraint violation and return a domain-specific error
+		// Map unique constraint violation on users.email to a domain error.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return ErrEmailExists.WithCause(err)
+		}
 		return err
 	}
 
@@ -85,8 +90,8 @@ func (r *repository) Update(ctx context.Context, user *User) error {
 	user.UpdatedAt = time.Now()
 
 	query, args, err := r.psql.Update("users").
-		Set("firstName", user.FirstName).
-		Set("lastName", user.LastName).
+		Set("first_name", user.FirstName).
+		Set("last_name", user.LastName).
 		Set("email", user.Email).
 		Set("password_hash", user.PasswordHash).
 		Set("email_verified", user.EmailVerified).
@@ -162,7 +167,7 @@ func (r *repository) FindByPasswordResetToken(ctx context.Context, tokenHash str
 // findOne is a helper method to find a single user by a given condition.
 func (r *repository) findOne(ctx context.Context, condition squirrel.Sqlizer) (*User, error) {
 	sql, args, err := r.psql.Select(
-		"id", "firstName", "lastName", "email", "password_hash", "is_active",
+		"id", "first_name", "last_name", "email", "password_hash", "email_verified",
 		"password_reset_token", "password_reset_token_expiry",
 		"created_at", "updated_at",
 	).From("users").Where(condition).Limit(1).ToSql()
@@ -180,7 +185,7 @@ func (r *repository) findOne(ctx context.Context, condition squirrel.Sqlizer) (*
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNotFound
+			return nil, ErrNotFound.WithCause(err)
 		}
 		return nil, err
 	}

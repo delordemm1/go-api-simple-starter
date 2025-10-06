@@ -8,8 +8,8 @@ import (
 // This is the core entity for the user module, used across the repository, service, and handler layers.
 type User struct {
 	ID                       string     `db:"id"`
-	FirstName                string     `db:"firstName"`
-	LastName                 string     `db:"lastName"`
+	FirstName                string     `db:"first_name"`
+	LastName                 string     `db:"last_name"`
 	Email                    string     `db:"email"`
 	PasswordHash             string     `db:"password_hash"`
 	EmailVerified            bool       `db:"email_verified"`

@@ -19,16 +19,16 @@ func (s *service) InitiatePasswordReset(ctx context.Context, email string) error
 			s.logger.Info("password reset requested for non-existent email", "email", email)
 			return nil
 		}
-		// For other errors, log and return a generic error.
+		// For other errors, log and return a generic domain error.
 		s.logger.Error("failed to find user by email for password reset", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	// 2. Generate a secure, unique password reset token.
 	token, err := generateSecureToken(32)
 	if err != nil {
 		s.logger.Error("failed to generate secure token for password reset", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	// 3. Hash the token before storing it in the database for security.
@@ -42,7 +42,7 @@ func (s *service) InitiatePasswordReset(ctx context.Context, email string) error
 	err = s.repo.UpdatePasswordResetInfo(ctx, user.ID, tokenHash, expiryTime)
 	if err != nil {
 		s.logger.Error("failed to update user with password reset token", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	// 6. Send the password reset email to the user.
@@ -70,7 +70,7 @@ func (s *service) FinalizePasswordReset(ctx context.Context, token, newPassword 
 			return ErrInvalidResetToken
 		}
 		s.logger.Error("failed to find user by password reset token", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	// 3. Check if the token has expired.
@@ -83,7 +83,7 @@ func (s *service) FinalizePasswordReset(ctx context.Context, token, newPassword 
 	newPasswordHash, err := hashPassword(newPassword)
 	if err != nil {
 		s.logger.Error("failed to hash new password during reset", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	// 5. Update the user's password and clear the reset token fields.
@@ -91,7 +91,7 @@ func (s *service) FinalizePasswordReset(ctx context.Context, token, newPassword 
 	err = s.repo.UpdatePassword(ctx, user.ID, newPasswordHash)
 	if err != nil {
 		s.logger.Error("failed to update user password after reset", "error", err)
-		return errors.New("internal server error")
+		return ErrInternal.WithCause(err)
 	}
 
 	s.logger.Info("user password has been reset successfully", "user_id", user.ID)

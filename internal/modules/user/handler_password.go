@@ -2,9 +2,9 @@ package user
 
 import (
 	"context"
-	"errors"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/delordemm1/go-api-simple-starter/internal/httpx"
+	"github.com/delordemm1/go-api-simple-starter/internal/validation"
 )
 
 // --- DTOs ---
@@ -37,6 +37,11 @@ type ResetPasswordResponse struct{}
 func (h *Handler) ForgotPasswordHandler(ctx context.Context, input *ForgotPasswordRequest) (*ForgotPasswordResponse, error) {
 	h.logger.Info("handling forgot password request", "email", input.Body.Email)
 
+	// Validate request
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
+	}
+
 	err := h.service.InitiatePasswordReset(ctx, input.Body.Email)
 	if err != nil {
 		// IMPORTANT: To prevent email enumeration attacks, we do not reveal if the
@@ -54,14 +59,15 @@ func (h *Handler) ForgotPasswordHandler(ctx context.Context, input *ForgotPasswo
 func (h *Handler) ResetPasswordHandler(ctx context.Context, input *ResetPasswordRequest) (*ResetPasswordResponse, error) {
 	h.logger.Info("handling reset password request")
 
+	// Validate request
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
+	}
+
 	err := h.service.FinalizePasswordReset(ctx, input.Body.Token, input.Body.Password)
 	if err != nil {
 		h.logger.Warn("failed to reset password", "error", err)
-		if errors.Is(err, ErrInvalidResetToken) {
-			return nil, huma.Error400BadRequest("the provided token is invalid or has expired")
-		}
-		// For any other error, return a generic internal server error.
-		return nil, huma.Error500InternalServerError("could not reset password")
+		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	h.logger.Info("password reset successfully")

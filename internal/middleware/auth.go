@@ -9,7 +9,6 @@ import (
 
 	"github.com/delordemm1/go-api-simple-starter/internal/modules/user"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
 // Claims defines the structure of the JWT claims.
@@ -52,15 +51,16 @@ func Authenticator(jwtSecret string, logger *slog.Logger) func(http.Handler) htt
 			}
 
 			// 4. Extract the user ID (subject) from the claims.
-			userID, err := uuid.Parse(claims.Subject)
-			if err != nil {
-				logger.Error("invalid user id in jwt claims", "subject", claims.Subject, "error", err)
-				http.Error(w, "invalid token claims", http.StatusUnauthorized)
-				return
-			}
+			// userID, err := uuid.Parse(claims.Subject)
+			// if err != nil {
+			// 	logger.Error("invalid user id in jwt claims", "subject", claims.Subject, "error", err)
+			// 	http.Error(w, "invalid token claims", http.StatusUnauthorized)
+			// 	return
+			// }
 
 			// 5. Add the user ID to the request's context for downstream handlers.
-			ctx := context.WithValue(r.Context(), user.UserIDKey, userID)
+			logger.Info("claims.Subject", "claims.Subject", claims.Subject)
+			ctx := context.WithValue(r.Context(), user.UserIDKey, claims.Subject)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

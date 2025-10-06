@@ -2,11 +2,10 @@ package user
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/google/uuid"
+	"github.com/delordemm1/go-api-simple-starter/internal/httpx"
+	"github.com/delordemm1/go-api-simple-starter/internal/validation"
 )
 
 // --- Context Key ---
@@ -55,11 +54,12 @@ type UpdateProfileRequest struct {
 func (h *Handler) GetProfileHandler(ctx context.Context, input *struct{}) (*ProfileResponse, error) {
 	// Extract user ID from the context, which is set by the auth middleware.
 	userIDVal := ctx.Value(UserIDKey)
-	userID, ok := userIDVal.(uuid.UUID)
+	h.logger.Info("userIDVal", "userIDVal", userIDVal)
+	userID, ok := userIDVal.(string)
 	if !ok {
 		h.logger.Error("user ID not found in context or is of wrong type")
 		// This indicates a misconfiguration in the middleware chain.
-		return nil, huma.Error401Unauthorized("invalid authentication context")
+		return nil, httpx.ToProblem(ctx, ErrUnauthorized.WithDetail("invalid authentication context"))
 	}
 
 	h.logger.Info("handling get profile request", "user_id", userID)
@@ -67,10 +67,7 @@ func (h *Handler) GetProfileHandler(ctx context.Context, input *struct{}) (*Prof
 	user, err := h.service.GetProfile(ctx, userID)
 	if err != nil {
 		h.logger.Error("failed to get user profile", "user_id", userID, "error", err)
-		if errors.Is(err, ErrNotFound) {
-			return nil, huma.Error404NotFound("user not found")
-		}
-		return nil, huma.Error500InternalServerError("failed to retrieve profile")
+		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	return toProfileResponse(user), nil
@@ -79,10 +76,15 @@ func (h *Handler) GetProfileHandler(ctx context.Context, input *struct{}) (*Prof
 // UpdateProfileHandler updates the profile of the currently authenticated user.
 func (h *Handler) UpdateProfileHandler(ctx context.Context, input *UpdateProfileRequest) (*ProfileResponse, error) {
 	userIDVal := ctx.Value(UserIDKey)
-	userID, ok := userIDVal.(uuid.UUID)
+	userID, ok := userIDVal.(string)
 	if !ok {
 		h.logger.Error("user ID not found in context for update profile")
-		return nil, huma.Error401Unauthorized("invalid authentication context")
+		return nil, httpx.ToProblem(ctx, ErrUnauthorized.WithDetail("invalid authentication context"))
+	}
+
+	// Validate request body
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
 	}
 
 	h.logger.Info("handling update profile request", "user_id", userID)
@@ -90,10 +92,7 @@ func (h *Handler) UpdateProfileHandler(ctx context.Context, input *UpdateProfile
 	updatedUser, err := h.service.UpdateProfile(ctx, userID, UpdateProfileInput{FirstName: &input.Body.FirstName, LastName: &input.Body.LastName})
 	if err != nil {
 		h.logger.Error("failed to update user profile", "user_id", userID, "error", err)
-		if errors.Is(err, ErrNotFound) {
-			return nil, huma.Error404NotFound("user not found")
-		}
-		return nil, huma.Error500InternalServerError("failed to update profile")
+		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	h.logger.Info("profile updated successfully", "user_id", userID)

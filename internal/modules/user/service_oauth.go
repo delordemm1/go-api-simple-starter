@@ -45,7 +45,7 @@ func (s *service) newOAuthProvider(provider string) (OAuth, error) {
 	// case "apple":
 	//  // Add Apple implementation here
 	default:
-		return nil, fmt.Errorf("unsupported oauth provider: %s", provider)
+		return nil, ErrUnsupportedOAuthProvider.WithDetail(fmt.Sprintf("unsupported oauth provider: %s", provider))
 	}
 }
 
@@ -101,7 +101,7 @@ func (s *service) InitiateOAuthLogin(ctx context.Context, provider string) (redi
 	// Generate a random state string for CSRF protection.
 	state, err := generateSecureToken(32)
 	if err != nil {
-		return "", fmt.Errorf("failed to generate oauth state: %w", err)
+		return "", ErrInternal.WithCause(fmt.Errorf("failed to generate oauth state: %w", err))
 	}
 
 	// The `oauth2.AccessTypeOffline` prompts the user for consent to get a refresh token.
@@ -121,28 +121,32 @@ func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code
 
 	token, err := s.repo.GetOAuthStateByState(ctx, state)
 	if err != nil {
-		s.logger.Error("Error getting token", "getToken", err)
-		return "", errors.New("error getting token")
+		if errors.Is(err, ErrNotFound) {
+			s.logger.Error("oauth state not found", "state", state, "error", err)
+			return "", ErrOAuthStateInvalid.WithCause(err)
+		}
+		s.logger.Error("error getting oauth state", "error", err)
+		return "", ErrInternal.WithCause(err)
 	}
 	if time.Now().After(token.ExpiresAt) {
-		s.logger.Error("Token expired", "token", token)
-		return "", errors.New("token expired")
+		s.logger.Error("oauth state expired", "state", state)
+		return "", ErrOAuthStateExpired
 	}
 	defer s.repo.DeleteOAuthState(ctx, state)
 
 	// Exchange the authorization code for an access token.
 	oauthToken, err := oauthProvider.getOAuthConfig().Exchange(ctx, code, oauth2.VerifierOption(token.Verifier))
 	if err != nil {
-		return "", fmt.Errorf("failed to exchange oauth code for token: %w", err)
+		return "", ErrOAuthExchangeFailed.WithCause(fmt.Errorf("failed to exchange oauth code for token: %w", err))
 	}
 
 	// 3. Fetch the user's information from the provider.
 	userInfo, err := oauthProvider.getUserInfo(ctx, &oauth2.Token{AccessToken: oauthToken.AccessToken})
 	if err != nil {
-		return "", err
+		return "", ErrOAuthExchangeFailed.WithCause(err)
 	}
 	if userInfo.Email == "" {
-		return "", errors.New("email not provided by oauth provider")
+		return "", ErrOAuthEmailMissing
 	}
 
 	// 4. Find or create the user in the local database.
@@ -160,7 +164,7 @@ func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code
 		if errors.Is(err, ErrNotFound) {
 			id, err := uuid.NewV7()
 			if err != nil {
-				return "", err
+				return "", ErrInternal.WithCause(err)
 			}
 			newUser := &User{
 				ID:            id.String(),
@@ -174,14 +178,14 @@ func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code
 
 			if err := s.repo.Create(ctx, newUser); err != nil {
 				s.logger.Error("failed to create new user from oauth", "error", err)
-				return "", errors.New("failed to create user")
+				return "", ErrInternal.WithCause(err)
 			}
 			s.logger.Info("new user created via oauth", "user_id", newUser.ID, "email", newUser.Email)
 			user = newUser
 		} else {
 			// Handle other database errors.
 			s.logger.Error("failed to find user by email during oauth callback", "error", err)
-			return "", errors.New("database error during login")
+			return "", ErrInternal.WithCause(err)
 		}
 	}
 
@@ -189,7 +193,7 @@ func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code
 	sessionToken, err := generateJWT(user.ID)
 	if err != nil {
 		s.logger.Error("failed to generate JWT after oauth login", "error", err)
-		return "", errors.New("failed to create session")
+		return "", ErrInternal.WithCause(err)
 	}
 
 	s.logger.Info("user logged in successfully via oauth", "provider", provider, "user_id", user.ID)

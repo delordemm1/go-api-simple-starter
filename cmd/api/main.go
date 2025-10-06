@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/delordemm1/go-api-simple-starter/internal/cache"
@@ -57,8 +58,27 @@ func main() {
 		})
 		router := server.New(cfg, logger, &userService)
 		hooks.OnStart(func() {
-			logger.Info(fmt.Sprintf("Starting server on port %d...", options.Port))
-			if err := http.ListenAndServe(fmt.Sprintf(":%d", options.Port), router); err != nil {
+			// Determine port: CLI -p overrides, else cfg.Server.Port, else 8080
+			port := options.Port
+			if port <= 0 {
+				if cfg.Server.Port != "" {
+					if p, err := strconv.Atoi(cfg.Server.Port); err == nil {
+						port = p
+						logger.Info("using port from config", "port", port)
+					} else {
+						logger.Warn("invalid port in config, falling back to default", "cfgPort", cfg.Server.Port)
+					}
+				}
+			} else {
+				logger.Info("using port from CLI", "port", port)
+			}
+			if port <= 0 {
+				port = 8080
+				logger.Info("using default port", "port", port)
+			}
+
+			logger.Info(fmt.Sprintf("Starting server on port %d...", port))
+			if err := http.ListenAndServe(fmt.Sprintf(":%d", port), router); err != nil {
 				slog.Error("Server failed to start", "error", err)
 				os.Exit(1)
 			}

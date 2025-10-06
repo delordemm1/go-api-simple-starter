@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"log"
 	"os"
 
@@ -12,8 +11,7 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
-//go:embed ../../migrations/*.sql
-var embedMigrations embed.FS
+// Using filesystem-based migrations from MIGRATIONS_DIR or default "migrations".
 
 func main() {
 	// 1. Get database URL from environment variables
@@ -35,8 +33,17 @@ func main() {
 	}
 
 	// 4. Configure Goose
-	goose.SetBaseFS(embedMigrations)
 	goose.SetDialect("postgres") // Use "postgres" for pgx/v5
+
+	// Select migrations directory (filesystem)
+	migrationsDir := os.Getenv("MIGRATIONS_DIR")
+	if migrationsDir == "" {
+		migrationsDir = "migrations"
+	}
+	if info, err := os.Stat(migrationsDir); err != nil || !info.IsDir() {
+		log.Fatalf("❌ Migrations directory not found: %s. Run from the repository root or set MIGRATIONS_DIR. Error: %v", migrationsDir, err)
+	}
+	log.Printf("✅ Using migrations directory: %s", migrationsDir)
 
 	// 5. Get command and arguments from os.Args
 	// Example: 'go run ./cmd/migrate up' -> os.Args will be ["./cmd/migrate/main.go", "up"]
@@ -48,7 +55,7 @@ func main() {
 
 	// 6. Run the Goose command
 	log.Printf("Running goose command: %s", command)
-	if err := goose.RunContext(context.Background(), command, db, "migrations", args...); err != nil {
+	if err := goose.RunContext(context.Background(), command, db, migrationsDir, args...); err != nil {
 		log.Fatalf("❌ Goose command '%s' failed: %v", command, err)
 	}
 }

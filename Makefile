@@ -33,12 +33,12 @@ migrate-create:
 ifndef name
     $(error name is not set. Usage: make migrate-create name=<migration_name>)
 endif
-    go run cmd/migrate/main.go create "$(name)" sql
+    go run cmd/migrate create "$(name)" sql
 
 ## migrate-up: migrate up
 .PHONY: migrate-up
 migrate-up:
-	go run cmd/migrate/main.go up
+	go run cmd/migrate up
 
 ## migrate-down: migrate down
 .PHONY: migrate-down

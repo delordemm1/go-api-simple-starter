@@ -5,19 +5,22 @@ import (
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/delordemm1/go-api-simple-starter/internal/middleware"
 )
 
 // Handler holds the dependencies for the user module's HTTP handlers.
 type Handler struct {
-	service Service
-	logger  *slog.Logger
+	service   Service
+	logger    *slog.Logger
+	jwtSecret string
 }
 
 // NewHandler creates a new handler for the user module.
-func NewHandler(service Service, logger *slog.Logger) *Handler {
+func NewHandler(service Service, logger *slog.Logger, jwtSecret string) *Handler {
 	return &Handler{
-		service: service,
-		logger:  logger,
+		service:   service,
+		logger:    logger,
+		jwtSecret: jwtSecret,
 	}
 }
 
@@ -63,11 +66,16 @@ func (h *Handler) RegisterRoutes(api huma.API) {
 		Summary: "Handle OAuth callback",
 	}, h.OAuthCallbackHandler)
 
+	// grp := huma.NewGroup(api)
+	// grp.UseMiddleware(middleware.Authenticator)
 	// --- Profile Routes (requires authentication middleware) ---
 	huma.Register(api, huma.Operation{
 		Method:  http.MethodGet,
 		Path:    "/users/profile",
 		Summary: "Get the current user's profile",
+		Security: []map[string][]string{
+			{"bearer": {}},
+		},
 		// Security: []huma.SecurityRequirement{{ID: "BearerAuth"}}, // Example of protected route
 	}, h.GetProfileHandler)
 

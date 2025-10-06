@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/delordemm1/go-api-simple-starter/internal/config"
-	"github.com/google/uuid"
 )
 
 // Service defines the interface for the user module's business logic.
@@ -17,8 +16,8 @@ type Service interface {
 	Login(ctx context.Context, email, password string) (string, error) // Returns a token
 
 	// Profile-related methods
-	GetProfile(ctx context.Context, userID uuid.UUID) (*User, error)
-	UpdateProfile(ctx context.Context, userID uuid.UUID, input UpdateProfileInput) (*User, error)
+	GetProfile(ctx context.Context, userID string) (*User, error)
+	UpdateProfile(ctx context.Context, userID string, input UpdateProfileInput) (*User, error)
 
 	// Password-related methods (placeholders for now)
 	InitiatePasswordReset(ctx context.Context, email string) error

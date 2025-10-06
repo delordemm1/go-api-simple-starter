@@ -2,9 +2,9 @@ package user
 
 import (
 	"context"
-	"errors"
 
-	"github.com/danielgtaylor/huma/v2"
+	"github.com/delordemm1/go-api-simple-starter/internal/httpx"
+	"github.com/delordemm1/go-api-simple-starter/internal/validation"
 )
 
 // --- DTOs (Data Transfer Objects) ---
@@ -71,15 +71,14 @@ func toRegisterResponse(user *User) *RegisterResponse {
 // RegisterHandler handles the user registration endpoint.
 func (h *Handler) RegisterHandler(ctx context.Context, input *RegisterRequest) (*RegisterResponse, error) {
 	h.logger.Info("handling user registration request", "email", input.Body.Email)
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
+	}
 
 	user, err := h.service.Register(ctx, input.Body.FirstName, input.Body.LastName, input.Body.Email, input.Body.Password)
 	if err != nil {
 		h.logger.Error("registration failed", "error", err)
-		if errors.Is(err, ErrEmailExists) {
-			return nil, huma.Error409Conflict("a user with this email already exists", err)
-		}
-		// For any other error, return a generic internal server error.
-		return nil, huma.Error500InternalServerError("failed to register user", err)
+		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	h.logger.Info("user registered successfully", "user_id", user.ID)
@@ -89,16 +88,14 @@ func (h *Handler) RegisterHandler(ctx context.Context, input *RegisterRequest) (
 // LoginHandler handles the user login endpoint.
 func (h *Handler) LoginHandler(ctx context.Context, input *LoginRequest) (*LoginResponse, error) {
 	h.logger.Info("handling user login request", "email", input.Body.Email)
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
+	}
 
 	token, err := h.service.Login(ctx, input.Body.Email, input.Body.Password)
 	if err != nil {
 		h.logger.Warn("login attempt failed", "email", input.Body.Email, "error", err)
-		// For both invalid credentials and user not found, return a generic unauthorized error
-		// to prevent email enumeration attacks.
-		if errors.Is(err, ErrInvalidCredentials) || errors.Is(err, ErrNotFound) {
-			return nil, huma.Error401Unauthorized("invalid email or password")
-		}
-		return nil, huma.Error500InternalServerError("login failed", err)
+		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	h.logger.Info("user logged in successfully", "email", input.Body.Email)
