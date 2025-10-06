@@ -28,7 +28,7 @@ func main() {
 			logger.Error("failed to load configuration")
 			os.Exit(1)
 		}
-		logger.Info("configuration loaded successfully", "env", cfg.Server.Env)
+		logger.Info("configuration loaded successfully", "env", cfg)
 
 		// --- Database & Cache ---
 		dbPool := database.NewPostgresPool(cfg.Database.URL)

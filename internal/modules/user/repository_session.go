@@ -2,11 +2,9 @@ package user
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 )
 
 // CreateUserActiveSession inserts a new user session record into the database.

@@ -58,7 +58,7 @@ func toRegisterResponse(user *User) *RegisterResponse {
 			LastName  string `json:"lastName"`
 			Email     string `json:"email"`
 		}{
-			ID:        user.ID.String(),
+			ID:        user.ID,
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
 			Email:     user.Email,

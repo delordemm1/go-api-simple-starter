@@ -48,7 +48,7 @@ func (h *Handler) OAuthLoginHandler(ctx context.Context, input *OAuthLoginReques
 	// The service now just generates the URL and a state.
 	// The state must be handled by your SvelteKit server (e.g., stored in its session).
 	// For this example, we assume the service doesn't need to persist the state itself.
-	redirectURL, _, err := h.service.InitiateOAuthLogin(ctx, input.Provider)
+	redirectURL, err := h.service.InitiateOAuthLogin(ctx, input.Provider)
 	if err != nil {
 		h.logger.Error("failed to initiate oauth login", "error", err)
 		return nil, huma.Error400BadRequest("Invalid OAuth provider")
@@ -71,7 +71,7 @@ func (h *Handler) OAuthCallbackHandler(ctx context.Context, input *OAuthCallback
 
 	// Call the service to handle the logic of exchanging the code for a token and getting user info.
 	// Note: The service signature needs to be updated to no longer require the 'storedState'.
-	jwtToken, err := h.service.HandleOAuthCallback(ctx, input.Provider, input.Code, input.State)
+	jwtToken, err := h.service.HandleOAuthCallback(ctx, input.Provider, input.State, input.Code)
 	if err != nil {
 		h.logger.Error("oauth callback processing failed", "error", err)
 		if errors.Is(err, ErrEmailExists) {

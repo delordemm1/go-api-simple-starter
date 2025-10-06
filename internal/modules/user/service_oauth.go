@@ -92,46 +92,52 @@ func (g *googleProvider) getUserInfo(ctx context.Context, token *oauth2.Token) (
 
 // InitiateOAuthLogin generates the redirect URL and a state for CSRF protection.
 // The handler is responsible for storing the state (e.g., in a secure, short-lived cookie).
-func (s *service) InitiateOAuthLogin(ctx context.Context, provider string) (redirectURL string, state string, err error) {
-	oauthProvider, err := s.newOAuthProvider(provider)
-	if err != nil {
-		return "", "", err
-	}
-
-	// Generate a random state string for CSRF protection.
-	state, err = generateSecureToken(32)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to generate oauth state: %w", err)
-	}
-
-	// The `oauth2.AccessTypeOffline` prompts the user for consent to get a refresh token.
-	url := oauthProvider.getOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
-
-	return url, state, nil
-}
-
-// HandleOAuthCallback processes the callback from the OAuth provider. It verifies the state,
-// exchanges the code for a token, fetches user info, finds or creates a local user,
-// and returns a JWT for the session.
-func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code, storedState string) (jwtToken string, err error) {
-	// 1. Validate the state to prevent CSRF attacks.
-	if state == "" || state != storedState {
-		return "", errors.New("invalid oauth state")
-	}
-
+func (s *service) InitiateOAuthLogin(ctx context.Context, provider string) (redirectURL string, err error) {
 	oauthProvider, err := s.newOAuthProvider(provider)
 	if err != nil {
 		return "", err
 	}
 
-	// 2. Exchange the authorization code for an access token.
-	token, err := oauthProvider.getOAuthConfig().Exchange(ctx, code)
+	// Generate a random state string for CSRF protection.
+	state, err := generateSecureToken(32)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate oauth state: %w", err)
+	}
+
+	// The `oauth2.AccessTypeOffline` prompts the user for consent to get a refresh token.
+	url := oauthProvider.getOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline)
+
+	return url, nil
+}
+
+// HandleOAuthCallback processes the callback from the OAuth provider. It verifies the state,
+// exchanges the code for a token, fetches user info, finds or creates a local user,
+// and returns a JWT for the session.
+func (s *service) HandleOAuthCallback(ctx context.Context, provider, state, code string) (jwtToken string, err error) {
+	oauthProvider, err := s.newOAuthProvider(provider)
+	if err != nil {
+		return "", err
+	}
+
+	token, err := s.repo.GetOAuthStateByState(ctx, state)
+	if err != nil {
+		s.logger.Error("Error getting token", "getToken", err)
+		return "", errors.New("error getting token")
+	}
+	if time.Now().After(token.ExpiresAt) {
+		s.logger.Error("Token expired", "token", token)
+		return "", errors.New("token expired")
+	}
+	defer s.repo.DeleteOAuthState(ctx, state)
+
+	// Exchange the authorization code for an access token.
+	oauthToken, err := oauthProvider.getOAuthConfig().Exchange(ctx, code, oauth2.VerifierOption(token.Verifier))
 	if err != nil {
 		return "", fmt.Errorf("failed to exchange oauth code for token: %w", err)
 	}
 
 	// 3. Fetch the user's information from the provider.
-	userInfo, err := oauthProvider.getUserInfo(ctx, token)
+	userInfo, err := oauthProvider.getUserInfo(ctx, &oauth2.Token{AccessToken: oauthToken.AccessToken})
 	if err != nil {
 		return "", err
 	}

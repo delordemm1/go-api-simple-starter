@@ -25,8 +25,8 @@ type Service interface {
 	FinalizePasswordReset(ctx context.Context, token, newPassword string) error
 
 	// OAuth-related methods (placeholders for now)
-	InitiateOAuthLogin(ctx context.Context, provider string) (redirectURL string, state string, err error)
-	HandleOAuthCallback(ctx context.Context, provider, state, code, storedState string) (jwtToken string, err error)
+	InitiateOAuthLogin(ctx context.Context, provider string) (redirectURL string, err error)
+	HandleOAuthCallback(ctx context.Context, provider, state, code string) (jwtToken string, err error)
 }
 
 // service implements the Service interface.
