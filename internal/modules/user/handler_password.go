@@ -22,7 +22,7 @@ type ForgotPasswordResponse struct{}
 // ResetPasswordRequest defines the structure for finalizing a password reset.
 type ResetPasswordRequest struct {
 	Body struct {
-		Token           string `json:"token" validate:"required"`
+		ResetToken      string `json:"resetToken" validate:"required"`
 		Password        string `json:"password" validate:"required,min=8"`
 		ConfirmPassword string `json:"confirmPassword" validate:"required,eqfield=Password"`
 	}
@@ -30,6 +30,21 @@ type ResetPasswordRequest struct {
 
 // ResetPasswordResponse is an empty successful response.
 type ResetPasswordResponse struct{}
+
+// VerifyPasswordCodeRequest is used to exchange a 6-digit code for a reset token.
+type VerifyPasswordCodeRequest struct {
+	Body struct {
+		Email string `json:"email" validate:"required,email"`
+		Code  string `json:"code" validate:"required,len=6"`
+	}
+}
+
+// VerifyPasswordCodeResponse returns the short-lived internal reset token.
+type VerifyPasswordCodeResponse struct {
+	Body struct {
+		ResetToken string `json:"resetToken"`
+	}
+}
 
 // --- Handlers ---
 
@@ -64,7 +79,7 @@ func (h *Handler) ResetPasswordHandler(ctx context.Context, input *ResetPassword
 		return nil, httpx.ToProblem(ctx, verr)
 	}
 
-	err := h.service.FinalizePasswordReset(ctx, input.Body.Token, input.Body.Password)
+	err := h.service.FinalizePasswordReset(ctx, input.Body.ResetToken, input.Body.Password)
 	if err != nil {
 		h.logger.Warn("failed to reset password", "error", err)
 		return nil, httpx.ToProblem(ctx, err)
@@ -72,4 +87,24 @@ func (h *Handler) ResetPasswordHandler(ctx context.Context, input *ResetPassword
 
 	h.logger.Info("password reset successfully")
 	return &ResetPasswordResponse{}, nil
+}
+
+// PasswordCodeVerifyHandler verifies a 6-digit code and returns a short-lived reset token.
+func (h *Handler) PasswordCodeVerifyHandler(ctx context.Context, input *VerifyPasswordCodeRequest) (*VerifyPasswordCodeResponse, error) {
+	h.logger.Info("handling password code verify request")
+
+	// Validate request
+	if verr := validation.ValidateStruct(&input.Body); verr != nil {
+		return nil, httpx.ToProblem(ctx, verr)
+	}
+
+	resetToken, err := h.service.VerifyPasswordResetCode(ctx, input.Body.Email, input.Body.Code)
+	if err != nil {
+		h.logger.Warn("password code verification failed", "error", err)
+		return nil, httpx.ToProblem(ctx, err)
+	}
+
+	resp := &VerifyPasswordCodeResponse{}
+	resp.Body.ResetToken = resetToken
+	return resp, nil
 }

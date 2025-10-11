@@ -2,7 +2,10 @@ package notification
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+
+	"github.com/delordemm1/go-api-simple-starter/internal/notification/templates"
 )
 
 // --- Constants for Type Safety ---
@@ -56,21 +59,26 @@ type smsSender interface {
 // Service is the main interface for the notification system.
 type Service interface {
 	Send(ctx context.Context, n Notification) error
+	// SendTemplateAny renders a template by ID with the provided data and dispatches across channels.
+	// Prefer the typed helper SendTemplate[T](...) for compile-time safety.
+	SendTemplateAny(ctx context.Context, recipient string, channels []Channel, priority Priority, templateID string, data any) error
 }
 
 // service is the concrete implementation.
 type service struct {
-	log         *slog.Logger
-	emailSender emailSender
-	smsSender   smsSender
+	log              *slog.Logger
+	emailSender      emailSender
+	smsSender        smsSender
+	templateRenderer templates.Renderer
 }
 
 // NewService creates a new notification service.
-func NewService(log *slog.Logger, emailSender emailSender, smsSender smsSender) Service {
+func NewService(log *slog.Logger, emailSender emailSender, smsSender smsSender, renderer templates.Renderer) Service {
 	return &service{
-		log:         log,
-		emailSender: emailSender,
-		smsSender:   smsSender,
+		log:              log,
+		emailSender:      emailSender,
+		smsSender:        smsSender,
+		templateRenderer: renderer,
 	}
 }
 
@@ -101,4 +109,35 @@ func (s *service) Send(ctx context.Context, n Notification) error {
 		}(channel)
 	}
 	return nil // Return immediately
+}
+
+// SendTemplateAny renders a template by ID with the provided data and dispatches across channels.
+func (s *service) SendTemplateAny(ctx context.Context, recipient string, channels []Channel, priority Priority, templateID string, data any) error {
+	if s.templateRenderer == nil {
+		s.log.Error("template renderer is not configured")
+		return errors.New("template renderer not configured")
+	}
+	rendered, err := s.templateRenderer.RenderAny(ctx, templateID, data)
+	if err != nil {
+		return err
+	}
+
+	n := Notification{
+		Recipient: recipient,
+		Channels:  channels,
+		Priority:  priority,
+		Content: Content{
+			EmailSubject:  rendered.Subject,
+			EmailHTMLBody: rendered.EmailHTML,
+			SMSText:       rendered.SMSText,
+			PushTitle:     rendered.PushTitle,
+			PushBody:      rendered.PushBody,
+		},
+	}
+	return s.Send(ctx, n)
+}
+
+// SendTemplate is a typed helper that preserves compile-time type-safety via a Handle[T].
+func SendTemplate[T any](ctx context.Context, s Service, h templates.Handle[T], recipient string, channels []Channel, priority Priority, data T) error {
+	return s.SendTemplateAny(ctx, recipient, channels, priority, h.ID(), data)
 }

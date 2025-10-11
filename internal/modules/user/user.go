@@ -48,3 +48,48 @@ type UserActiveSession struct {
 	LastActiveAt time.Time `db:"last_active_at"`
 	CreatedAt    time.Time `db:"created_at"`
 }
+
+
+// --- Verification & Reset Types ---
+
+// VerificationPurpose defines the reason a 6-digit code is issued.
+type VerificationPurpose string
+
+const (
+	VerificationPurposeEmailVerify  VerificationPurpose = "email_verify"
+	VerificationPurposePasswordReset VerificationPurpose = "password_reset"
+)
+
+// VerificationChannel defines the medium used to deliver a verification code.
+type VerificationChannel string
+
+const (
+	VerificationChannelEmail VerificationChannel = "email"
+)
+
+// VerificationCode represents a one-time 6-digit verification code issued to a user/contact.
+type VerificationCode struct {
+	ID          string               `db:"id"`
+	UserID      *string              `db:"user_id"`
+	Contact     string               `db:"contact"`
+	Purpose     VerificationPurpose  `db:"purpose"`
+	Channel     VerificationChannel  `db:"channel"`
+	CodeHash    string               `db:"code_hash"`
+	Attempts    int                  `db:"attempts"`
+	MaxAttempts int                  `db:"max_attempts"`
+	LastSentAt  time.Time            `db:"last_sent_at"`
+	ExpiresAt   time.Time            `db:"expires_at"`
+	ConsumedAt  *time.Time           `db:"consumed_at"`
+	CreatedAt   time.Time            `db:"created_at"`
+}
+
+// ActionToken represents a short-lived opaque token used to authorize sensitive actions (e.g., password reset).
+type ActionToken struct {
+	ID        string     `db:"id"`
+	UserID    string     `db:"user_id"`
+	Purpose   string     `db:"purpose"` // e.g., "password_reset"
+	TokenHash string     `db:"token_hash"`
+	ExpiresAt time.Time  `db:"expires_at"`
+	ConsumedAt *time.Time `db:"consumed_at"`
+	CreatedAt time.Time  `db:"created_at"`
+}

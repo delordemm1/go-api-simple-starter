@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -89,4 +91,22 @@ func hashToken(token string) string {
 	hasher := sha256.New()
 	hasher.Write([]byte(token))
 	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+}
+
+// generateNumericCode returns a string of n numeric digits using crypto/rand.
+func generateNumericCode(n int) (string, error) {
+	if n <= 0 {
+		n = 6
+	}
+	var b strings.Builder
+	b.Grow(n)
+	ten := big.NewInt(10)
+	for i := 0; i < n; i++ {
+		x, err := rand.Int(rand.Reader, ten)
+		if err != nil {
+			return "", err
+		}
+		b.WriteByte(byte('0' + x.Int64()))
+	}
+	return b.String(), nil
 }

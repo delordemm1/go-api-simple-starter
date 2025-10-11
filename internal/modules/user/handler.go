@@ -41,12 +41,31 @@ func (h *Handler) RegisterRoutes(api huma.API) {
 		Summary: "Log in a user",
 	}, h.LoginHandler)
 
+	// --- Email Verification Routes ---
+	huma.Register(api, huma.Operation{
+		Method:  http.MethodPost,
+		Path:    "/users/verify/email/request",
+		Summary: "Request a 6-digit email verification code",
+	}, h.ResendEmailVerificationHandler)
+
+	huma.Register(api, huma.Operation{
+		Method:  http.MethodPost,
+		Path:    "/users/verify/email/confirm",
+		Summary: "Confirm email verification with a 6-digit code",
+	}, h.ConfirmEmailVerificationHandler)
+
 	// --- Password Management Routes ---
 	huma.Register(api, huma.Operation{
 		Method:  http.MethodPost,
 		Path:    "/users/password/forgot",
 		Summary: "Initiate password reset",
 	}, h.ForgotPasswordHandler)
+
+	huma.Register(api, huma.Operation{
+		Method:  http.MethodPost,
+		Path:    "/users/password/code/verify",
+		Summary: "Verify 6-digit code and get a reset token",
+	}, h.PasswordCodeVerifyHandler)
 
 	huma.Register(api, huma.Operation{
 		Method:  http.MethodPost,

@@ -134,12 +134,38 @@ var (
 		TypeURI:    "urn:problem:user/err-invalid-credentials",
 	}
 
+	// Email verification gating
+	ErrEmailNotVerified = &DomainError{
+		Code:       "ErrEmailNotVerified",
+		HTTPStatus: http.StatusForbidden,
+		Title:      "Forbidden",
+		Message:    "email not verified",
+		TypeURI:    "urn:problem:user/err-email-not-verified",
+	}
+
 	ErrInvalidOTP = &DomainError{
 		Code:       "ErrInvalidOTP",
 		HTTPStatus: http.StatusBadRequest,
 		Title:      "Bad Request",
 		Message:    "invalid or expired one-time password",
 		TypeURI:    "urn:problem:user/err-invalid-otp",
+	}
+
+	// Abuse controls for code sending/verification
+	ErrResendTooSoon = &DomainError{
+		Code:       "ErrResendTooSoon",
+		HTTPStatus: http.StatusTooManyRequests,
+		Title:      "Too Many Requests",
+		Message:    "please wait before requesting another code",
+		TypeURI:    "urn:problem:user/err-resend-too-soon",
+	}
+
+	ErrTooManyAttempts = &DomainError{
+		Code:       "ErrTooManyAttempts",
+		HTTPStatus: http.StatusTooManyRequests,
+		Title:      "Too Many Requests",
+		Message:    "too many invalid attempts",
+		TypeURI:    "urn:problem:user/err-too-many-attempts",
 	}
 
 	ErrInvalidResetToken = &DomainError{

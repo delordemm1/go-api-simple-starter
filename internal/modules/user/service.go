@@ -21,21 +21,27 @@ type Service interface {
 	GetProfile(ctx context.Context, userID string) (*User, error)
 	UpdateProfile(ctx context.Context, userID string, input UpdateProfileInput) (*User, error)
 
-	// Password-related methods (placeholders for now)
-	InitiatePasswordReset(ctx context.Context, email string) error
-	FinalizePasswordReset(ctx context.Context, token, newPassword string) error
+	// Email verification (6-digit code)
+	ResendEmailVerification(ctx context.Context, email string) error
+	ConfirmEmailVerification(ctx context.Context, email, code string) error
 
-	// OAuth-related methods (placeholders for now)
+	// Password reset (6-digit code + internal reset token)
+	InitiatePasswordReset(ctx context.Context, email string) error
+	VerifyPasswordResetCode(ctx context.Context, email, code string) (resetToken string, err error)
+	FinalizePasswordReset(ctx context.Context, resetToken, newPassword string) error
+
+	// OAuth-related methods
 	InitiateOAuthLogin(ctx context.Context, provider OAuthProvider) (redirectURL string, err error)
 	HandleOAuthCallback(ctx context.Context, provider OAuthProvider, state, code string) (sessionID string, err error)
 }
 
 // service implements the Service interface.
 type service struct {
-	repo     Repository
-	logger   *slog.Logger
-	config   *config.Config
-	sessions session.Provider
+	repo         Repository
+	logger       *slog.Logger
+	config       *config.Config
+	sessions     session.Provider
+	notification notification.Service
 	// cache redis.Client // Example of adding a cache dependency
 }
 
@@ -51,9 +57,10 @@ type Config struct {
 // NewService creates a new user service with the given dependencies.
 func NewService(cfg *Config) Service {
 	return &service{
-		repo:     cfg.Repo,
-		logger:   cfg.Logger,
-		config:   cfg.Config,
-		sessions: cfg.Sessions,
+		repo:         cfg.Repo,
+		logger:       cfg.Logger,
+		config:       cfg.Config,
+		sessions:     cfg.Sessions,
+		notification: cfg.Notification,
 	}
 }

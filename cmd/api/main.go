@@ -14,6 +14,7 @@ import (
 	"github.com/delordemm1/go-api-simple-starter/internal/database"
 	"github.com/delordemm1/go-api-simple-starter/internal/modules/user"
 	"github.com/delordemm1/go-api-simple-starter/internal/notification"
+	"github.com/delordemm1/go-api-simple-starter/internal/notification/templates"
 	"github.com/delordemm1/go-api-simple-starter/internal/server"
 	"github.com/delordemm1/go-api-simple-starter/internal/session"
 )
@@ -52,10 +53,16 @@ func main() {
 
 		// --- Module Initialization (Bottom-Up) ---
 
+		// Templates engine (embedded by default, disk override in dev)
+		tmplEngine := templates.NewEngine(templates.Config{
+			Dir:    cfg.Templates.Dir,
+			Reload: cfg.Templates.Reload,
+		}, logger)
+
 		emailSender := notification.NewSMTPEmailSender(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, logger)
 		smsSender := notification.NewDummySMSSender(logger)
 		// Create the main notification service
-		notificationService := notification.NewService(logger, emailSender, smsSender)
+		notificationService := notification.NewService(logger, emailSender, smsSender, tmplEngine)
 		// User Module
 		userRepo := user.NewRepository(dbPool)
 
