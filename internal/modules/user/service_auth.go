@@ -71,14 +71,13 @@ func (s *service) Login(ctx context.Context, email, password string) (string, er
 	if !checkPasswordHash(password, user.PasswordHash) {
 		return "", ErrInvalidCredentials
 	}
+// 3) Create an auth session and return the session ID.
+sessionID, err := s.sessions.CreateAuthSession(ctx, user.ID, "", "")
+if err != nil {
+	s.logger.Error("failed to create auth session", "error", err)
+	return "", ErrInternal.WithCause(err)
+}
 
-	// 3) Generate a JWT token for the authenticated user.
-	token, err := generateJWT(user.ID)
-	if err != nil {
-		s.logger.Error("failed to generate JWT", "error", err)
-		return "", ErrInternal.WithCause(err)
-	}
-
-	s.logger.Info("user logged in successfully", "user_id", user.ID)
-	return token, nil
+s.logger.Info("user logged in successfully", "user_id", user.ID)
+return sessionID, nil
 }

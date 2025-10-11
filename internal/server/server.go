@@ -10,6 +10,7 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/delordemm1/go-api-simple-starter/internal/config"
 	"github.com/delordemm1/go-api-simple-starter/internal/modules/user"
+	"github.com/delordemm1/go-api-simple-starter/internal/session"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -23,7 +24,7 @@ import (
 // }
 
 // New creates and configures a new server instance.
-func New(cfg *config.Config, log *slog.Logger, userService *user.Service) chi.Router {
+func New(cfg *config.Config, log *slog.Logger, userService user.Service, sessions session.Provider) chi.Router {
 	// Create a new Chi router and Huma API.
 	router := chi.NewMux()
 	router.Use(middleware.RequestID)
@@ -36,13 +37,13 @@ func New(cfg *config.Config, log *slog.Logger, userService *user.Service) chi.Ro
 		"bearer": {
 			Type:         "http",
 			Scheme:       "bearer",
-			BearerFormat: "JWT",
+			BearerFormat: "Opaque",
 		},
 	}
 	api := humachi.New(router, apiConfig)
 
 	// Add standard middleware.
-	userHandler := user.NewHandler(*userService, log)
+	userHandler := user.NewHandler(userService, log, sessions)
 	userHandler.RegisterRoutes(api)
 
 	// Register a simple health check endpoint.

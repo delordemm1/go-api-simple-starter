@@ -31,6 +31,10 @@ type Problem struct {
 	Code      string `json:"code,omitempty"`
 	Context   any    `json:"context,omitempty"`
 	RequestID string `json:"requestId,omitempty"`
+
+	// Aliases for client contracts preferring {code,message,data}
+	Message string `json:"message,omitempty"`
+	Data    any    `json:"data,omitempty"`
 }
 
 // Error implements error interface by returning the problem detail.
@@ -105,14 +109,18 @@ func ToProblem(ctx context.Context, err error) error {
 		}
 
 		reqID := middleware.GetReqID(ctx)
+		msg := defaultDetail(detail, status)
+		ctxData := dp.ProblemContext()
 		return &Problem{
 			Type:      typeURI,
 			Title:     defaultTitle(title, status),
 			Status:    status,
-			Detail:    defaultDetail(detail, status),
+			Detail:    msg,
 			Code:      code,
-			Context:   dp.ProblemContext(),
+			Context:   ctxData,
 			RequestID: reqID,
+			Message:   msg,
+			Data:      ctxData,
 		}
 	}
 
@@ -133,6 +141,8 @@ func ValidationProblem(ctx context.Context, summary string, fields map[string][]
 		Code:      "ErrValidation",
 		Context:   map[string]any{"fields": fields},
 		RequestID: middleware.GetReqID(ctx),
+		Message:   summary,
+		Data:      map[string]any{"fields": fields},
 	}
 }
 
@@ -149,6 +159,7 @@ func InternalProblem(ctx context.Context, detail string) *Problem {
 		Detail:    detail,
 		Code:      "ErrInternal",
 		RequestID: middleware.GetReqID(ctx),
+		Message:   detail,
 	}
 }
 

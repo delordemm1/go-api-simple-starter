@@ -6,13 +6,16 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2/humacli"
 	"github.com/delordemm1/go-api-simple-starter/internal/cache"
 	"github.com/delordemm1/go-api-simple-starter/internal/config"
 	"github.com/delordemm1/go-api-simple-starter/internal/database"
 	"github.com/delordemm1/go-api-simple-starter/internal/modules/user"
+	"github.com/delordemm1/go-api-simple-starter/internal/notification"
 	"github.com/delordemm1/go-api-simple-starter/internal/server"
+	"github.com/delordemm1/go-api-simple-starter/internal/session"
 )
 
 // Options for the CLI.
@@ -49,14 +52,28 @@ func main() {
 
 		// --- Module Initialization (Bottom-Up) ---
 
+		emailSender := notification.NewSMTPEmailSender(cfg.SMTP.Host, cfg.SMTP.Port, cfg.SMTP.Username, cfg.SMTP.Password, cfg.SMTP.From, logger)
+		smsSender := notification.NewDummySMSSender(logger)
+		// Create the main notification service
+		notificationService := notification.NewService(logger, emailSender, smsSender)
 		// User Module
 		userRepo := user.NewRepository(dbPool)
-		userService := user.NewService(&user.Config{
-			Repo:   userRepo,
-			Logger: logger,
-			Config: cfg,
+
+		// Session provider (Postgres-backed) with sliding & absolute TTLs
+		sessionsProvider := session.NewPostgresProvider(dbPool, session.Config{
+			SlidingTTL:  7 * 24 * time.Hour,
+			AbsoluteTTL: 30 * 24 * time.Hour,
 		})
-		router := server.New(cfg, logger, &userService)
+
+		userService := user.NewService(&user.Config{
+			Repo:         userRepo,
+			Logger:       logger,
+			Config:       cfg,
+			Sessions:     sessionsProvider,
+			Notification: notificationService,
+		})
+
+		router := server.New(cfg, logger, userService, sessionsProvider)
 		hooks.OnStart(func() {
 			// Determine port: CLI -p overrides, else cfg.Server.Port, else 8080
 			port := options.Port

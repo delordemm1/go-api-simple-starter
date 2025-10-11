@@ -4,16 +4,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/delordemm1/go-api-simple-starter/internal/contextx"
 	"github.com/delordemm1/go-api-simple-starter/internal/httpx"
 	"github.com/delordemm1/go-api-simple-starter/internal/validation"
 )
 
 // --- Context Key ---
-
-// contextKey is a private type to prevent collisions with other packages' context keys.
-type contextKey string
-
-const UserIDKey contextKey = "userID"
+// Now provided by internal/contextx to avoid import cycles and ensure consistency.
 
 // --- DTOs & Mappers ---
 
@@ -53,7 +50,7 @@ type UpdateProfileRequest struct {
 // It relies on an authentication middleware to have set the user's ID in the context.
 func (h *Handler) GetProfileHandler(ctx context.Context, input *struct{}) (*ProfileResponse, error) {
 	// Extract user ID from the context, which is set by the auth middleware.
-	userIDVal := ctx.Value(UserIDKey)
+	userIDVal := ctx.Value(contextx.UserIDKey)
 	h.logger.Info("userIDVal", "userIDVal", userIDVal)
 	userID, ok := userIDVal.(string)
 	if !ok {
@@ -75,7 +72,7 @@ func (h *Handler) GetProfileHandler(ctx context.Context, input *struct{}) (*Prof
 
 // UpdateProfileHandler updates the profile of the currently authenticated user.
 func (h *Handler) UpdateProfileHandler(ctx context.Context, input *UpdateProfileRequest) (*ProfileResponse, error) {
-	userIDVal := ctx.Value(UserIDKey)
+	userIDVal := ctx.Value(contextx.UserIDKey)
 	userID, ok := userIDVal.(string)
 	if !ok {
 		h.logger.Error("user ID not found in context for update profile")

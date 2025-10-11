@@ -33,9 +33,8 @@ type OAuthCallbackRequest struct {
 // OAuthCallbackResponse is the JSON response for a successful callback.
 type OAuthCallbackResponse struct {
 	Body struct {
-		Message string `json:"message"`
+		SessionToken string `json:"sessionToken"`
 	}
-	XSessionToken string `header:"x-session-token"`
 }
 
 // --- Handlers ---
@@ -44,7 +43,7 @@ type OAuthCallbackResponse struct {
 func (h *Handler) OAuthLoginHandler(ctx context.Context, input *OAuthLoginRequest) (*OAuthLoginResponse, error) {
 	h.logger.Info("initiating oauth login", "provider", input.Provider)
 
-	redirectURL, err := h.service.InitiateOAuthLogin(ctx, input.Provider)
+	redirectURL, err := h.service.InitiateOAuthLogin(ctx, OAuthProvider(input.Provider))
 	if err != nil {
 		h.logger.Error("failed to initiate oauth login", "error", err)
 		return nil, httpx.ToProblem(ctx, err)
@@ -57,20 +56,19 @@ func (h *Handler) OAuthLoginHandler(ctx context.Context, input *OAuthLoginReques
 }
 
 // OAuthCallbackHandler handles the callback from the proxy.
-// On success, it returns the JWT in a custom header for the proxy to handle.
+// On success, it returns the session token in a custom header for the proxy to handle.
 func (h *Handler) OAuthCallbackHandler(ctx context.Context, input *OAuthCallbackRequest) (*OAuthCallbackResponse, error) {
 	h.logger.Info("handling oauth callback", "provider", input.Provider)
 
-	jwtToken, err := h.service.HandleOAuthCallback(ctx, input.Provider, input.State, input.Code)
+	sessionToken, err := h.service.HandleOAuthCallback(ctx, OAuthProvider(input.Provider), input.State, input.Code)
 	if err != nil {
 		h.logger.Error("oauth callback processing failed", "error", err)
 		return nil, httpx.ToProblem(ctx, err)
 	}
 
-	h.logger.Info("oauth login successful, returning token in header")
+	h.logger.Info("oauth login successful, returning session token in header")
 
 	resp := &OAuthCallbackResponse{}
-	resp.XSessionToken = jwtToken
-	resp.Body.Message = "Authentication successful."
+	resp.Body.SessionToken = sessionToken
 	return resp, nil
 }

@@ -15,6 +15,7 @@ type Config struct {
 	Redis     RedisConfig
 	Google    GoogleConfig
 	Apple     AppleConfig
+	SMTP      SMTPConfig
 	JWTSecret string `env:"JWT_SECRET,required"`
 }
 
@@ -46,6 +47,14 @@ type DatabaseConfig struct {
 // RedisConfig holds the Redis configuration.
 type RedisConfig struct {
 	URL string `mapstructure:"url"`
+}
+
+type SMTPConfig struct {
+	From     string `env:"SMTP_FROM"`
+	Password string `env:"SMTP_PASSWORD"`
+	Username string `env:"SMTP_USERNAME"`
+	Port     int    `env:"SMTP_PORT"`
+	Host     string `env:"SMTP_HOST"`
 }
 
 // Load creates a new Config object from environment variables.

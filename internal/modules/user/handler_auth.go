@@ -3,9 +3,34 @@ package user
 import (
 	"context"
 
+	"github.com/delordemm1/go-api-simple-starter/internal/contextx"
 	"github.com/delordemm1/go-api-simple-starter/internal/httpx"
 	"github.com/delordemm1/go-api-simple-starter/internal/validation"
 )
+
+// Logout
+
+// LogoutResponse is an empty successful response.
+type LogoutResponse struct{}
+
+// LogoutHandler deletes the current session based on the Authorization Bearer session ID.
+func (h *Handler) LogoutHandler(ctx context.Context, _ *struct{}) (*LogoutResponse, error) {
+	// The session middleware stored the session ID in context
+	val := ctx.Value(contextx.SessionIDKey)
+	sessionID, _ := val.(string)
+	if sessionID == "" {
+		// Fallback: treat as unauthorized/invalid context
+		return nil, httpx.ToProblem(ctx, ErrUnauthorized.WithDetail("invalid authentication context"))
+	}
+
+	if err := h.sessions.Delete(ctx, sessionID); err != nil {
+		// Deletion should be idempotent; but if provider returns error, map to generic
+		h.logger.Warn("failed to delete session on logout", "error", err)
+		return nil, httpx.ToProblem(ctx, ErrInternal.WithDetail("logout failed"))
+	}
+
+	return &LogoutResponse{}, nil
+}
 
 // --- DTOs (Data Transfer Objects) ---
 
@@ -42,7 +67,7 @@ type LoginRequest struct {
 // LoginResponse defines the structure for a successful login response.
 type LoginResponse struct {
 	Body struct {
-		Token string `json:"token"`
+		SessionToken string `json:"sessionToken"`
 	}
 }
 
@@ -92,18 +117,15 @@ func (h *Handler) LoginHandler(ctx context.Context, input *LoginRequest) (*Login
 		return nil, httpx.ToProblem(ctx, verr)
 	}
 
-	token, err := h.service.Login(ctx, input.Body.Email, input.Body.Password)
+	// Authenticate and issue a session ID
+	sessionToken, err := h.service.Login(ctx, input.Body.Email, input.Body.Password)
 	if err != nil {
 		h.logger.Warn("login attempt failed", "email", input.Body.Email, "error", err)
 		return nil, httpx.ToProblem(ctx, err)
 	}
 
 	h.logger.Info("user logged in successfully", "email", input.Body.Email)
-	return &LoginResponse{
-		Body: struct {
-			Token string `json:"token"`
-		}{
-			Token: token,
-		},
-	}, nil
+	resp := &LoginResponse{}
+	resp.Body.SessionToken = sessionToken
+	return resp, nil
 }

@@ -6,21 +6,22 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/delordemm1/go-api-simple-starter/internal/middleware"
+	"github.com/delordemm1/go-api-simple-starter/internal/session"
 )
 
 // Handler holds the dependencies for the user module's HTTP handlers.
 type Handler struct {
-	service   Service
-	logger    *slog.Logger
-	jwtSecret string
+	service  Service
+	logger   *slog.Logger
+	sessions session.Provider
 }
 
 // NewHandler creates a new handler for the user module.
-func NewHandler(service Service, logger *slog.Logger, jwtSecret string) *Handler {
+func NewHandler(service Service, logger *slog.Logger, sessions session.Provider) *Handler {
 	return &Handler{
-		service:   service,
-		logger:    logger,
-		jwtSecret: jwtSecret,
+		service:  service,
+		logger:   logger,
+		sessions: sessions,
 	}
 }
 
@@ -66,23 +67,36 @@ func (h *Handler) RegisterRoutes(api huma.API) {
 		Summary: "Handle OAuth callback",
 	}, h.OAuthCallbackHandler)
 
-	// grp := huma.NewGroup(api)
-	// grp.UseMiddleware(middleware.Authenticator)
+	// --- Protected Group (Session-based auth via Huma middleware) ---
+	grp := huma.NewGroup(api)
+	grp.UseMiddleware(middleware.JWTAuthHuma(h.sessions, h.logger))
+
 	// --- Profile Routes (requires authentication middleware) ---
-	huma.Register(api, huma.Operation{
+	huma.Register(grp, huma.Operation{
 		Method:  http.MethodGet,
 		Path:    "/users/profile",
 		Summary: "Get the current user's profile",
 		Security: []map[string][]string{
 			{"bearer": {}},
 		},
-		// Security: []huma.SecurityRequirement{{ID: "BearerAuth"}}, // Example of protected route
 	}, h.GetProfileHandler)
 
-	huma.Register(api, huma.Operation{
+	huma.Register(grp, huma.Operation{
 		Method:  http.MethodPatch,
 		Path:    "/users/profile",
 		Summary: "Update the current user's profile",
-		// Security: []huma.SecurityRequirement{{ID: "BearerAuth"}}, // Example of protected route
+		Security: []map[string][]string{
+			{"bearer": {}},
+		},
 	}, h.UpdateProfileHandler)
+
+	// --- Logout (protected) ---
+	huma.Register(grp, huma.Operation{
+		Method:  http.MethodPost,
+		Path:    "/users/logout",
+		Summary: "Logout and invalidate current session",
+		Security: []map[string][]string{
+			{"bearer": {}},
+		},
+	}, h.LogoutHandler)
 }

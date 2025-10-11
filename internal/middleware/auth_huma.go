@@ -2,26 +2,24 @@ package middleware
 
 import (
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/delordemm1/go-api-simple-starter/internal/contextx"
 	apphttpx "github.com/delordemm1/go-api-simple-starter/internal/httpx"
-	"github.com/delordemm1/go-api-simple-starter/internal/modules/user"
+	"github.com/delordemm1/go-api-simple-starter/internal/session"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/google/uuid"
 )
 
-// JWTAuthHuma is a router-agnostic Huma middleware that validates a JWT and injects
-// the user ID into the request context using user.UserIDKey for downstream handlers.
-// On failure it writes an RFC7807 problem+json response with code ErrUnauthorized.
-func JWTAuthHuma(jwtSecret string, logger *slog.Logger) huma.Middleware {
+// JWTAuthHuma (now session-based) is a router-agnostic Huma middleware that validates
+// an opaque Bearer session ID, injects the user ID and session ID into the context,
+// and extends the session TTL. On failure, it writes an RFC7807 problem+json response.
+func JWTAuthHuma(provider session.Provider, logger *slog.Logger) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
-		w, r := humachi.Unwrap(ctx)
+		r, w := humachi.Unwrap(ctx)
 
 		writeUnauthorized := func(detail string) {
 			reqID := chimw.GetReqID(r.Context())
@@ -32,50 +30,40 @@ func JWTAuthHuma(jwtSecret string, logger *slog.Logger) huma.Middleware {
 				Detail:    detail,
 				Code:      "ErrUnauthorized",
 				RequestID: reqID,
+				Message:   detail, // alias to support {code,message,data}
 			}
 			w.Header().Set("Content-Type", "application/problem+json")
 			w.WriteHeader(p.GetStatus())
 			_ = json.NewEncoder(w).Encode(p)
 		}
 
-		// 1. Authorization header.
+		// 1) Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
 			writeUnauthorized("missing authorization header")
 			return
 		}
 
-		// 2. Bearer token.
-		tokenString, found := strings.CutPrefix(authHeader, "Bearer ")
-		if !found {
+		// 2) Expect Bearer & opaque session ID
+		sessionID, found := strings.CutPrefix(authHeader, "Bearer ")
+		if !found || strings.TrimSpace(sessionID) == "" {
 			writeUnauthorized("invalid authorization header format")
 			return
 		}
 
-		// 3. Parse and validate the token.
-		claims := &jwt.RegisteredClaims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.New("unexpected signing method")
-			}
-			return []byte(jwtSecret), nil
-		})
-		if err != nil || !token.Valid {
-			logger.Warn("invalid jwt token", "error", err)
-			writeUnauthorized("invalid or expired token")
-			return
-		}
-
-		// 4. Extract subject as UUID.
-		userID, err := uuid.Parse(claims.Subject)
+		// 3) Validate session & extend sliding TTL
+		userID, err := provider.GetAndExtend(r.Context(), sessionID)
 		if err != nil {
-			logger.Error("invalid user id in jwt claims", "subject", claims.Subject, "error", err)
-			writeUnauthorized("invalid token claims")
+			logger.Warn("invalid session", "error", err)
+			writeUnauthorized("invalid or expired session")
 			return
 		}
 
-		// 5. Inject user ID into context for downstream handlers.
-		ctx = huma.WithValue(ctx, user.UserIDKey, userID)
+		// 4) Inject into context for downstream handlers
+		ctx = huma.WithValue(ctx, contextx.UserIDKey, userID)
+		ctx = huma.WithValue(ctx, contextx.SessionIDKey, sessionID)
+
+		// 5) Continue
 		next(ctx)
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"log/slog"
 
 	"github.com/delordemm1/go-api-simple-starter/internal/config"
+	"github.com/delordemm1/go-api-simple-starter/internal/notification"
+	"github.com/delordemm1/go-api-simple-starter/internal/session"
 )
 
 // Service defines the interface for the user module's business logic.
@@ -13,7 +15,7 @@ import (
 type Service interface {
 	// Auth-related methods
 	Register(ctx context.Context, firstName, lastName, email, password string) (*User, error)
-	Login(ctx context.Context, email, password string) (string, error) // Returns a token
+	Login(ctx context.Context, email, password string) (string, error) // Returns a session ID
 
 	// Profile-related methods
 	GetProfile(ctx context.Context, userID string) (*User, error)
@@ -24,30 +26,34 @@ type Service interface {
 	FinalizePasswordReset(ctx context.Context, token, newPassword string) error
 
 	// OAuth-related methods (placeholders for now)
-	InitiateOAuthLogin(ctx context.Context, provider string) (redirectURL string, err error)
-	HandleOAuthCallback(ctx context.Context, provider, state, code string) (jwtToken string, err error)
+	InitiateOAuthLogin(ctx context.Context, provider OAuthProvider) (redirectURL string, err error)
+	HandleOAuthCallback(ctx context.Context, provider OAuthProvider, state, code string) (sessionID string, err error)
 }
 
 // service implements the Service interface.
 type service struct {
-	repo   Repository
-	logger *slog.Logger
-	config *config.Config
+	repo     Repository
+	logger   *slog.Logger
+	config   *config.Config
+	sessions session.Provider
 	// cache redis.Client // Example of adding a cache dependency
 }
 
 // Config holds the dependencies for the user service.
 type Config struct {
-	Repo   Repository
-	Logger *slog.Logger
-	Config *config.Config
+	Repo         Repository
+	Logger       *slog.Logger
+	Config       *config.Config
+	Sessions     session.Provider
+	Notification notification.Service
 }
 
 // NewService creates a new user service with the given dependencies.
 func NewService(cfg *Config) Service {
 	return &service{
-		repo:   cfg.Repo,
-		logger: cfg.Logger,
-		config: cfg.Config,
+		repo:     cfg.Repo,
+		logger:   cfg.Logger,
+		config:   cfg.Config,
+		sessions: cfg.Sessions,
 	}
 }
