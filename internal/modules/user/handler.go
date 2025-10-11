@@ -86,6 +86,12 @@ func (h *Handler) RegisterRoutes(api huma.API) {
 		Summary: "Handle OAuth callback",
 	}, h.OAuthCallbackHandler)
 
+	huma.Register(api, huma.Operation{
+		Method:  http.MethodPost,
+		Path:    "/users/oauth/{provider}/callback",
+		Summary: "Handle OAuth callback (form_post for Apple)",
+	}, h.OAuthCallbackPostHandler)
+
 	// --- Protected Group (Session-based auth via Huma middleware) ---
 	grp := huma.NewGroup(api)
 	grp.UseMiddleware(middleware.JWTAuthHuma(h.sessions, h.logger))

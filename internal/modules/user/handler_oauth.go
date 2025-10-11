@@ -72,3 +72,42 @@ func (h *Handler) OAuthCallbackHandler(ctx context.Context, input *OAuthCallback
 	resp.Body.SessionToken = sessionToken
 	return resp, nil
 }
+
+
+// OAuthCallbackPostRequest supports both form_post (Apple) and optional JSON via proxy.
+type OAuthCallbackPostRequest struct {
+	Provider string `path:"provider"`
+	// Form-encoded fields from Apple (response_mode=form_post)
+	Code  string `form:"code"`
+	State string `form:"state"`
+	// Optional JSON body if a proxy forwards as JSON
+	Body struct {
+		Code  string `json:"code"`
+		State string `json:"state"`
+		User  string `json:"user,omitempty"`
+	}
+}
+
+// OAuthCallbackPostHandler handles POST callbacks (Apple form_post or JSON proxy).
+func (h *Handler) OAuthCallbackPostHandler(ctx context.Context, input *OAuthCallbackPostRequest) (*OAuthCallbackResponse, error) {
+	h.logger.Info("handling oauth callback (POST)", "provider", input.Provider)
+
+	code := input.Code
+	state := input.State
+	if code == "" {
+		code = input.Body.Code
+	}
+	if state == "" {
+		state = input.Body.State
+	}
+
+	sessionToken, err := h.service.HandleOAuthCallback(ctx, OAuthProvider(input.Provider), state, code)
+	if err != nil {
+		h.logger.Error("oauth callback processing failed (POST)", "error", err)
+		return nil, httpx.ToProblem(ctx, err)
+	}
+
+	resp := &OAuthCallbackResponse{}
+	resp.Body.SessionToken = sessionToken
+	return resp, nil
+}

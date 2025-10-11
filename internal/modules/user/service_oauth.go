@@ -59,7 +59,7 @@ func (s *service) newOAuthProvider(provider string) (OAuth, error) {
 		return &appleProvider{
 			config: &oauth2.Config{
 				ClientID:     s.config.Apple.ClientID,
-				ClientSecret: s.config.Apple.PrivateKey,
+				ClientSecret: "",
 				RedirectURL:  s.config.Apple.RedirectURL,
 				Endpoint: oauth2.Endpoint{
 					AuthURL:  "https://appleid.apple.com/auth/authorize",
@@ -208,7 +208,18 @@ func (s *service) InitiateOAuthLogin(ctx context.Context, provider OAuthProvider
 	}
 
 	// The `oauth2.AccessTypeOffline` prompts the user for consent to get a refresh token.
-	url := oauthProvider.getOAuthConfig().AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.S256ChallengeOption(verifier))
+	opts := []oauth2.AuthCodeOption{
+		oauth2.AccessTypeOffline,
+		oauth2.S256ChallengeOption(verifier),
+	}
+	// Apple requires response_mode=form_post when requesting name/email scopes.
+	if provider == "apple" {
+		opts = append(opts,
+			oauth2.SetAuthURLParam("response_mode", "form_post"),
+			oauth2.SetAuthURLParam("response_type", "code"),
+		)
+	}
+	url := oauthProvider.getOAuthConfig().AuthCodeURL(state, opts...)
 
 	return url, nil
 }
@@ -260,7 +271,7 @@ func (s *service) HandleOAuthCallback(ctx context.Context, provider OAuthProvide
 	}
 
 	// 3. Fetch the user's information from the provider.
-	userInfo, err := oauthProvider.getUserInfo(ctx, &oauth2.Token{AccessToken: oauthToken.AccessToken})
+	userInfo, err := oauthProvider.getUserInfo(ctx, oauthToken)
 	if err != nil {
 		return "", ErrOAuthExchangeFailed.WithCause(err)
 	}
